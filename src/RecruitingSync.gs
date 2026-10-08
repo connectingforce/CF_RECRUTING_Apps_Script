@@ -91,7 +91,7 @@ function recruitingRead_() {
       out[23]=recruitingYN_(get(r,'WORKED_BENELUX'));out[24]=recruitingYN_(get(r,'WORKED_AS_LEADER'));
       out[25]=recruitingYN_(get(r,'ENGLISH_SKILL'))==='TAK' ? get(r,'ENGLISH_SKILL_LEVEL') : '—';
       out[26]=recruitingYN_(get(r,'DUTCH_SKILL'))==='TAK' ? get(r,'DUTCH_SKILL_LEVEL') : '—';
-      out[29]=get(r,'FINAL_EVALUATION');out[32]='NEW';out[36]=src.label;out[44]=key;
+      out[29]=get(r,'FINAL_EVALUATION');out[33]='🆕';out[36]=src.label;out[37]='CF-ND-'+(sid || String(i+2));out[44]=key;
       candidates.push({out:out, date:out[1] instanceof Date ? out[1].getTime():0});
     });
   });
@@ -114,7 +114,7 @@ function importRecruitingBatch() {
     const start=sheet.getLastRow()+1;
     if (sheet.getMaxColumns()<45) sheet.insertColumnsAfter(sheet.getMaxColumns(),45-sheet.getMaxColumns());
     if (sheet.getMaxRows()<start+batch.length-1) sheet.insertRowsAfter(sheet.getMaxRows(),start+batch.length-1-sheet.getMaxRows());
-    sheet.getRange(start,1,batch.length,45).setValues(batch);
+    // AG i AM są zarezerwowane dla istniejących ARRAYFORMULA; nie zapisujemy tam nawet pustych wartości.\n    sheet.getRange(start,1,batch.length,32).setValues(batch.map(r=>r.slice(0,32)));\n    sheet.getRange(start,34,batch.length,5).setValues(batch.map(r=>r.slice(33,38)));\n    sheet.getRange(start,40,batch.length,6).setValues(batch.map(r=>r.slice(39,45)));
     sheet.getRange(start,2,batch.length,1).setNumberFormat('yyyy-mm-dd');
     sheet.getRange(start,5,batch.length,1).setNumberFormat('dd.MM.yyyy');
     Logger.log('Dodano '+batch.length+' rekordów. Istniejących nie zmieniono.');
