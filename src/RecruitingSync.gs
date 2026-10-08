@@ -122,9 +122,9 @@ function importRecruitingBatch() {
   } finally { lock.releaseLock(); }
 }
 function installRecruitingTrigger() {
-  ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='importRecruitingBatch').forEach(ScriptApp.deleteTrigger);
+  ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='importRecruitingBatch').forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('importRecruitingBatch').timeBased().everyMinutes(15).create();
 }
 function removeRecruitingTrigger() {
-  ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='importRecruitingBatch').forEach(ScriptApp.deleteTrigger);
+  ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='importRecruitingBatch').forEach(t => ScriptApp.deleteTrigger(t));
 }
