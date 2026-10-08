@@ -103,26 +103,54 @@ function previewRecruitingSync() {
   const summary={existing:s.previous, newCandidates:s.candidates.length, skippedDuplicates:s.duplicates, invalid:s.invalid, nextBatch:Math.min(RECRUITING_BATCH_LIMIT,s.candidates.length)};
   Logger.log(JSON.stringify(summary)); return summary;
 }
+function recruitingWriteRows_(sheet, batch) {
+  if (!batch.length) return;
+  const start = sheet.getLastRow() + 1;
+  const last = start + batch.length - 1;
+  if (sheet.getMaxColumns() < 45) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), 45-sheet.getMaxColumns());
+  }
+  if (sheet.getMaxRows() < last) {
+    sheet.insertRowsAfter(sheet.getMaxRows(), last-sheet.getMaxRows());
+  }
+  // Nie wolno dotykać AG, AM ani AZ:AG przez pola dynamiczne.
+  // Kolumny AG (33) i AM (39) mają już ARRAYFORMULA.
+  sheet.getRange(start,1,batch.length,32).setValues(batch.map(r=>r.slice(0,32)));
+  sheet.getRange(start,34,batch.length,5).setValues(batch.map(r=>r.slice(33,38)));
+  sheet.getRange(start,45,batch.length,1).setValues(batch.map(r=>[r[44]]));
+  sheet.getRange(start,2,batch.length,1).setNumberFormat('yyyy-mm-dd');
+  sheet.getRange(start,5,batch.length,1).setNumberFormat('dd.MM.yyyy');
+}
+// Jednorazowy import WSZYSTKICH wykrytych nowych zgłoszeń.
+// Rozbija zapis na pakiety, ale w obrębie jednego uruchomienia.
+function importAllRecruitingCandidates() {
+  const lock=LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error('Inna synchronizacja jest uruchomiona.');
+  try {
+    const state=recruitingRead_(); // kontrola duplikatów ponownie pod blokadą
+    const rows=state.candidates.map(c=>c.out);
+    let added=0;
+    for (let offset=0; offset<rows.length; offset+=RECRUITING_BATCH_LIMIT) {
+      const batch=rows.slice(offset,offset+RECRUITING_BATCH_LIMIT);
+      recruitingWriteRows_(state.target,batch);
+      added+=batch.length;
+      SpreadsheetApp.flush();
+    }
+    Logger.log(JSON.stringify({added:added, skippedDuplicates:state.duplicates,
+      invalid:state.invalid, remaining:0}));
+    return {added:added,skippedDuplicates:state.duplicates,invalid:state.invalid};
+  } finally {lock.releaseLock();}
+}
+// Zachowanie zgodności ze starszym wyzwalaczem (pojedynczy pakiet).
 function importRecruitingBatch() {
   const lock=LockService.getScriptLock();
-  if (!lock.tryLock(30000)) throw new Error('Inna synchronizacja trwa');
+  if (!lock.tryLock(30000)) throw new Error('Inna synchronizacja jest uruchomiona.');
   try {
     const s=recruitingRead_();
-    const batch=s.candidates.slice(0,RECRUITING_BATCH_LIMIT).map(x=>x.out);
-    if (!batch.length) { Logger.log('Brak nowych rekordów');return 0; }
-    const sheet=s.target;
-    const start=sheet.getLastRow()+1;
-    if (sheet.getMaxColumns()<45) sheet.insertColumnsAfter(sheet.getMaxColumns(),45-sheet.getMaxColumns());
-    if (sheet.getMaxRows()<start+batch.length-1) sheet.insertRowsAfter(sheet.getMaxRows(),start+batch.length-1-sheet.getMaxRows());
-    // AG i AM są zarezerwowane dla istniejących ARRAYFORMULA; nie zapisujemy tam nawet pustych wartości.
-    sheet.getRange(start,1,batch.length,32).setValues(batch.map(r=>r.slice(0,32)));
-    sheet.getRange(start,34,batch.length,5).setValues(batch.map(r=>r.slice(33,38)));
-    sheet.getRange(start,40,batch.length,6).setValues(batch.map(r=>r.slice(39,45)));
-    sheet.getRange(start,2,batch.length,1).setNumberFormat('yyyy-mm-dd');
-    sheet.getRange(start,5,batch.length,1).setNumberFormat('dd.MM.yyyy');
-    Logger.log('Dodano '+batch.length+' rekordów. Istniejących nie zmieniono.');
-    return batch.length;
-  } finally { lock.releaseLock(); }
+    const rows=s.candidates.slice(0,RECRUITING_BATCH_LIMIT).map(c=>c.out);
+    recruitingWriteRows_(s.target,rows);
+    return rows.length;
+  } finally {lock.releaseLock();}
 }
 function installRecruitingTrigger() {
   ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='importRecruitingBatch').forEach(t => ScriptApp.deleteTrigger(t));
@@ -140,7 +168,7 @@ function removeRecruitingTrigger() {
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('🔄 Synchronizacja')
     .addItem('🔎 Sprawdź nowe zgłoszenia', 'showRecruitingPreview')
-    .addItem('📥 Importuj nowych kandydatów (maks. 50)', 'confirmRecruitingImport')
+    .addItem('📥 Importuj wszystkie nowe zgłoszenia', 'confirmRecruitingImport')
     .addSeparator()
     .addItem('ℹ️ Stan automatycznej synchronizacji', 'showRecruitingTriggerStatus')
     .addToUi();
@@ -150,31 +178,39 @@ function showRecruitingPreview() {
   try {
     const x=previewRecruitingSync();
     ui.alert('Podgląd synchronizacji',
-      'Zapisanych kandydatów: '+x.existing+
-      '\\nNowych do zaimportowania: '+x.newCandidates+
-      '\\nPominiętych duplikatów: '+x.skippedDuplicates+
-      '\\nNieprawidłowych wierszy: '+x.invalid+
-      '\\nNastępna partia: '+x.nextBatch+
-      '\\n\\nNie wprowadzono żadnych zmian.', ui.ButtonSet.OK);
+      'Obecne rekordy: '+x.existing+'\n'+
+      'Nowe do dodania: '+x.newCandidates+'\n'+
+      'Wykryte duplikaty: '+x.skippedDuplicates+'\n'+
+      'Pominięte nieprawidłowe: '+x.invalid+'\n\n'+
+      'To tylko podgląd. Niczego nie zapisano.', ui.ButtonSet.OK);
   } catch(e) { ui.alert('Błąd odczytu: '+e.message); throw e; }
 }
 function confirmRecruitingImport() {
   const ui=SpreadsheetApp.getUi();
   try {
     const x=previewRecruitingSync();
-    if (!x.newCandidates) { ui.alert('Brak nowych kandydatów do dodania.'); return; }
-    const button=ui.alert('Potwierdź import',
-      'Wykryto '+x.newCandidates+' nowych zgłoszeń.\\nCzy dopisać maksymalnie '+x.nextBatch+
-      ' rekordów do KANDYDACI?\\nIstniejących rekordów nie aktualizujemy.\\n\\nKontynuuj wyłącznie po wcześniejszym teście na kopii i weryfikacji zgód.',
+    if (!x.newCandidates) { ui.alert('Baza aktualna','Brak nowych zgłoszeń do dodania.',ui.ButtonSet.OK);return; }
+    const button=ui.alert('Import nowych kandydatów',
+      'Nowe zgłoszenia: '+x.newCandidates+'\n'+
+      'Wykryte duplikaty: '+x.skippedDuplicates+'\n'+
+      'Nieprawidłowe rekordy: '+x.invalid+'\n\n'+
+      'Dodać WSZYSTKIE nowe zgłoszenia?\n'+
+      'Istniejące rekordy i notatki pozostaną bez zmian.\n\n'+
+      'Import wykonaj po teście na kopii CRM i weryfikacji uprawnienia do przetwarzania danych.',
       ui.ButtonSet.YES_NO);
     if (button!==ui.Button.YES) return;
-    const count=importRecruitingBatch();
-    ui.alert('Import zakończony', 'Dodano '+count+' kandydatów. Sprawdź wiersze na końcu KANDYDACI.', ui.ButtonSet.OK);
+    const result=importAllRecruitingCandidates();
+    ui.alert('Import zakończony',
+      'Dodane rekordy: '+result.added+'\n'+
+      'Pominięte duplikaty: '+result.skippedDuplicates+'\n'+
+      'Pominięte błędne: '+result.invalid+'\n\n'+
+      'Nowe zgłoszenia znajdziesz na końcu zakładki KANDYDACI.',
+      ui.ButtonSet.OK);
   } catch(e) { ui.alert('Błąd importu: '+e.message); throw e; }
 }
 function showRecruitingTriggerStatus() {
   const count=ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='importRecruitingBatch').length;
   SpreadsheetApp.getUi().alert(count
-    ? 'Znaleziono '+count+' wyzwalacz(y) importRecruitingBatch. Nie włączaj automatycznego importu przed testami.'
-    : 'Nie znaleziono wyzwalacza automatycznego importu.');
+    ? 'Aktywne wyzwalacze importu: '+count
+    : 'Brak aktywnego wyzwalacza automatycznego importu.');
 }
