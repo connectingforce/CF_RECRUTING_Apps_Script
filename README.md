@@ -14,13 +14,14 @@ Synchronizacja zgłoszeń do istniejącego arkusza CF_RECRUTING (zakładka `KAND
 2. Utwórz plik `RecruitingSync.gs` i wklej **całą** zawartość `src/RecruitingSync.gs`.
 3. W Apps Script → Ustawienia projektu → Właściwości skryptu dodaj:
    - `CF_RECRUTING_TARGET_ID` — identyfikator arkusza docelowego,
-   - `CF_RECRUTING_SOURCE_NEODAK_ID` — identyfikator arkusza źródłowego.
+   - `CF_RECRUTING_SOURCE_NEODAK_ID` — identyfikator arkusza NEODAK,
+   - `CF_RECRUTING_SOURCE_ROOFER_ID` — identyfikator arkusza SRC_ROOFER.
 4. Wykonaj `previewRecruitingSync()` i sprawdź Dziennik wykonywania.
 5. Po weryfikacji zgodności zgód, liczby rekordów, mapowania i braku duplikatów uruchom `importRecruitingBatch()`.
 6. Po testach produkcyjnych można włączyć `installRecruitingTrigger()` (co 15 minut).
 
 ## Zakres v0.1
-- Źródło: zakładka `Roofers` w arkuszu NEODAK, typ ROOFER.
+- Źródła: zakładka `Roofers` z NEODAK oraz `JF_ROOFER_2026` z SRC_ROOFER; oba profil ROOFER.
 - Dedup: `Submission ID` plus e-mail oraz nazwisko+telefon dla rekordów historycznych.
 - Kolumna AS (45) w docelowym arkuszu: techniczny `SOURCE_KEY` dla kolejnych synchronizacji.
 - Statusy rekruterskie w już istniejących rekordach pozostają nietknięte.
