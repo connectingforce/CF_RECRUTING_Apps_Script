@@ -4,7 +4,8 @@
  * Konfiguracja identyfikatorów w Script Properties, NIE w publicznym kodzie.
  */
 const RECRUITING_SOURCES = Object.freeze([
-  { property: 'CF_RECRUTING_SOURCE_NEODAK_ID', tab: 'Roofers', label: 'NEODAK_RecrutingSources', profile: 'ROOFER' }
+  { property: 'CF_RECRUTING_SOURCE_NEODAK_ID', tab: 'Roofers', label: 'NEODAK_RecrutingSources', profile: 'ROOFER' },
+  { property: 'CF_RECRUTING_SOURCE_ROOFER_ID', tab: 'JF_ROOFER_2026', label: 'SRC_ROOFER', profile: 'ROOFER' }
 ]);
 const RECRUITING_TARGET = 'KANDYDACI';
 const RECRUITING_KEY_COLUMN = 45; // AS, techniczne SOURCE_KEY
